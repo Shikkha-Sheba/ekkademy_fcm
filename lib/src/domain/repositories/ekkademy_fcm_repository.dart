@@ -7,6 +7,14 @@ abstract interface class EkkademyFcmRepository {
 
   Future<void> syncToken({String? token});
 
+  Future<void> deleteToken();
+
+  Future<void> unregisterToken({String? token});
+
+  Future<void> subscribeToTopic(String topic);
+
+  Future<void> unsubscribeFromTopic(String topic);
+
   Stream<String> get onTokenRefresh;
 
   Stream<RemoteMessage> get onForegroundMessage;

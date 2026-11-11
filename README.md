@@ -4,13 +4,16 @@ Reusable Firebase Cloud Messaging module for Ekkademy Flutter applications.
 
 ## Responsibilities
 
-- FCM permission request
-- FCM token retrieval and refresh listener
-- Auth-aware token sync callback
-- Foreground message callback
-- Notification tap callbacks (background and terminated launch)
+- FCM permission request & foreground presentation setup
+- Built-in Local Notification service for heads-up foreground banners (`flutter_local_notifications`)
+- FCM token retrieval, auto-refresh listener, and in-memory retry on sync failure
+- Auth-aware token sync callback (`onTokenSync`)
+- Logout token unregister callback (`onTokenDelete`)
+- Topic subscription and unsubscription (`subscribeToTopic` / `unsubscribeFromTopic`)
+- Foreground message callback (`onForegroundMessage`)
+- Notification tap callbacks (`onNotificationTap` - background and terminated launch)
 - Riverpod providers
-- Background-handler helper
+- Top-level background message handler helper
 
 The host app owns Firebase initialization, Firebase options, backend API calls,
 authentication state, and app-specific navigation.
@@ -21,6 +24,7 @@ authentication state, and app-specific navigation.
 - Dart >= 3.8
 - Riverpod 3.x
 - Firebase Messaging 16.x or 17.x
+- Flutter Local Notifications 18.x or 19.x
 
 ## Install from Git
 
@@ -43,14 +47,24 @@ ProviderScope(
     ekkademyFcmConfigProvider.overrideWithValue(
       EkkademyFcmConfig(
         isAuthenticated: () async => authState.isAuthenticated,
+        showLocalNotificationOnForeground: true, // Enables heads-up banner in foreground
+        androidNotificationChannelId: 'ekkademy_fcm_channel',
+        androidNotificationChannelName: 'Ekkademy Notifications',
+        androidNotificationIcon: '@mipmap/ic_launcher',
         onTokenSync: (token) async {
           await dio.post(
             '/your-real-device-token-endpoint',
             data: {'token': token},
           );
         },
+        onTokenDelete: (token) async {
+          await dio.delete(
+            '/your-real-device-token-endpoint',
+            data: {'token': token},
+          );
+        },
         onForegroundMessage: (message) async {
-          // Update in-app state or show an in-app banner.
+          // Update in-app state or handle message.
         },
         onNotificationTap: (message) async {
           // Navigate using this app's own router.
@@ -68,26 +82,50 @@ ProviderScope(
 `authState` and `dio` above are examples from the host application. Do not put
 those app-specific objects inside this package.
 
-## Initialize once
+## Usage Guide
 
-Call after Firebase.initializeApp() and inside the configured ProviderScope:
+### 1. Initialize once
+Call after `Firebase.initializeApp()` and inside the configured `ProviderScope`:
 
 ```dart
 ref.read(ekkademyFcmControllerProvider).initialize();
 ```
 
-A convenient place is a small ConsumerStatefulWidget mounted once near the
+A convenient place is a small `ConsumerStatefulWidget` mounted once near the
 root of the app. Do not initialize it on every screen.
 
-After login or auth handoff succeeds, call:
+### 2. Login Flow (Sync Token)
+After login or authentication handoff succeeds, call:
 
 ```dart
 await ref.read(ekkademyFcmControllerProvider).syncToken();
 ```
 
-This is necessary if FCM initialization happened before authentication.
+This ensures the token is synced to the backend if initialization happened before login or while offline.
 
-## Background handler
+### 3. Logout Flow (Unregister Token)
+When the user logs out, call:
+
+```dart
+await ref.read(ekkademyFcmControllerProvider).unregisterToken();
+```
+
+This invokes `onTokenDelete` (unlinking the token from your backend) and deletes the FCM token from the local device instance to prevent unwanted notifications after logout.
+
+### 4. Topic Subscriptions
+To subscribe or unsubscribe from FCM topics (e.g., `all_students`, `classroom_101`):
+
+```dart
+final controller = ref.read(ekkademyFcmControllerProvider);
+
+// Subscribe
+await controller.subscribeToTopic('classroom_101');
+
+// Unsubscribe
+await controller.unsubscribeFromTopic('classroom_101');
+```
+
+## Background Handler
 
 Each host app must register its own top-level entry point in `main.dart`:
 
@@ -122,7 +160,7 @@ Register the handler before `runApp`. If Firebase is initialized using native
 default configuration in your app, use that same initialization strategy here.
 Do not initialize Firebase twice with conflicting options.
 
-## Platform setup
+## Platform Setup
 
 ### Android
 
@@ -130,6 +168,7 @@ Do not initialize Firebase twice with conflicting options.
 - Ensure the Google Services Gradle plugin is configured.
 - Android 13+ requires notification permission. This package requests it when
   `requestPermissionOnInitialize` is true.
+- Ensure `@mipmap/ic_launcher` or your custom notification icon exists in `android/app/src/main/res/drawable` or `mipmap`.
 - For OS-rendered notifications while backgrounded/terminated, backend FCM
   messages should include a `notification` payload. Data-only messages do not
   automatically create a visible notification.
@@ -145,17 +184,14 @@ Do not initialize Firebase twice with conflicting options.
 - iOS force-quit behavior can prevent background processing until the user
   opens the app again.
 
-## Important behavior
+## Important Behavior & Security Notes
 
-- `onForegroundMessage` is a callback; this package does not create Android
-  local notifications. Add a local-notifications implementation in the host
-  app if you need a visible notification while the app is open.
+- **Foreground Heads-Up Notifications**: Built-in support is included via `EkkademyLocalNotificationService`. Set `showLocalNotificationOnForeground: true` in `EkkademyFcmConfig` to automatically display heads-up banner notifications when an FCM message arrives in foreground.
 - `onNotificationTap` handles notification-open events from background and
   terminated launch.
 - Notification navigation must be implemented by each host app.
-- Token sync is skipped while `isAuthenticated()` returns false.
-- Call `syncToken()` after login/auth handoff to sync the existing token.
+- Token sync is skipped while `isAuthenticated()` returns `false`.
+- In-memory retry is performed if token sync fails due to network error or unauthenticated state. Calling `syncToken()` will retry pending tokens safely.
 - Backend token sync should be idempotent (upsert by user/device/token).
-- On logout, the host app should unlink the token from its backend if that is
-  part of the backend contract.
-- Do not log full FCM tokens in production.
+- On logout, call `unregisterToken()` to remove the token on backend and delete the FCM token locally.
+- Do not log full FCM tokens in production logs.

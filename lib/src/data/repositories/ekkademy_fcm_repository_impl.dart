@@ -38,6 +38,29 @@ class EkkademyFcmRepositoryImpl implements EkkademyFcmRepository {
   }
 
   @override
+  Future<void> deleteToken() => _service.deleteToken();
+
+  @override
+  Future<void> unregisterToken({String? token}) async {
+    final authenticated = await _config.isAuthenticated();
+    final value = token ?? await getToken();
+
+    if (authenticated && value != null && value.trim().isNotEmpty) {
+      await _config.onTokenDelete?.call(value);
+    }
+
+    await deleteToken();
+  }
+
+  @override
+  Future<void> subscribeToTopic(String topic) =>
+      _service.subscribeToTopic(topic);
+
+  @override
+  Future<void> unsubscribeFromTopic(String topic) =>
+      _service.unsubscribeFromTopic(topic);
+
+  @override
   Stream<String> get onTokenRefresh => _service.onTokenRefresh;
 
   @override

@@ -31,8 +31,15 @@ class EkkademyFcmService {
 
     return _messaging.getNotificationSettings();
   }
-  //update latter
   Future<String?> getToken() => _messaging.getToken();
+
+  Future<void> deleteToken() => _messaging.deleteToken();
+
+  Future<void> subscribeToTopic(String topic) =>
+      _messaging.subscribeToTopic(topic);
+
+  Future<void> unsubscribeFromTopic(String topic) =>
+      _messaging.unsubscribeFromTopic(topic);
 
   Stream<String> get onTokenRefresh => _messaging.onTokenRefresh;
 
