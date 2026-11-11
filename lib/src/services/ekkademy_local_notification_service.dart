@@ -3,9 +3,8 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 class EkkademyLocalNotificationService {
-  EkkademyLocalNotificationService({
-    FlutterLocalNotificationsPlugin? plugin,
-  }) : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
+  EkkademyLocalNotificationService({FlutterLocalNotificationsPlugin? plugin})
+    : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
 
   final FlutterLocalNotificationsPlugin _plugin;
   bool _initialized = false;
@@ -28,8 +27,8 @@ class EkkademyLocalNotificationService {
     );
 
     await _plugin.initialize(
-      initializationSettings,
       onDidReceiveNotificationResponse: onSelectNotification,
+      settings: initializationSettings,
     );
 
     final androidChannel = AndroidNotificationChannel(
@@ -41,7 +40,8 @@ class EkkademyLocalNotificationService {
 
     await _plugin
         .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
+          AndroidFlutterLocalNotificationsPlugin
+        >()
         ?.createNotificationChannel(androidChannel);
 
     _initialized = true;
@@ -54,7 +54,8 @@ class EkkademyLocalNotificationService {
     required String channelDescription,
     required String defaultIcon,
   }) async {
-    final title = message.notification?.title ?? message.data['title']?.toString();
+    final title =
+        message.notification?.title ?? message.data['title']?.toString();
     final body = message.notification?.body ?? message.data['body']?.toString();
 
     if (title == null && body == null) return;
@@ -81,11 +82,11 @@ class EkkademyLocalNotificationService {
 
     final id = (DateTime.now().millisecondsSinceEpoch & 0x7FFFFFFF);
     await _plugin.show(
-      id,
-      title,
-      body,
-      details,
+      title: title,
+      body: body,
+      notificationDetails: details,
       payload: message.data.isNotEmpty ? message.data.toString() : null,
+      id: id,
     );
   }
 }
