@@ -12,7 +12,7 @@ Reusable Firebase Cloud Messaging module for Ekkademy Flutter applications.
 - Topic subscription and unsubscription (`subscribeToTopic` / `unsubscribeFromTopic`)
 - Foreground message callback (`onForegroundMessage`)
 - Notification tap callbacks (`onNotificationTap` - background and terminated launch)
-- Riverpod providers
+- Optional Riverpod provider integration (`ekkademyFcmControllerProvider`)
 - Top-level background message handler helper
 
 The host app owns Firebase initialization, Firebase options, backend API calls,
@@ -22,7 +22,6 @@ authentication state, and app-specific navigation.
 
 - Flutter >= 3.27
 - Dart >= 3.8
-- Riverpod 3.x
 - Firebase Messaging 16.x or 17.x
 - Flutter Local Notifications 18.x or 19.x
 
@@ -39,90 +38,91 @@ dependencies:
 Replace the repository URL with the actual Git remote. For a private repository,
 make sure CI and developer machines have Git access.
 
-## Configure ProviderScope
+## Quick Initialization (Recommended)
+
+Call `EkkademyFcm.initialize(...)` once during app startup (e.g. in `main()` after `Firebase.initializeApp()`):
 
 ```dart
-ProviderScope(
-  overrides: [
-    ekkademyFcmConfigProvider.overrideWithValue(
-      EkkademyFcmConfig(
-        isAuthenticated: () async => authState.isAuthenticated,
-        showLocalNotificationOnForeground: true, // Enables heads-up banner in foreground
-        androidNotificationChannelId: 'ekkademy_fcm_channel',
-        androidNotificationChannelName: 'Ekkademy Notifications',
-        androidNotificationIcon: '@mipmap/ic_launcher',
-        onTokenSync: (token) async {
-          await dio.post(
-            '/your-real-device-token-endpoint',
-            data: {'token': token},
-          );
-        },
-        onTokenDelete: (token) async {
-          await dio.delete(
-            '/your-real-device-token-endpoint',
-            data: {'token': token},
-          );
-        },
-        onForegroundMessage: (message) async {
-          // Update in-app state or handle message.
-        },
-        onNotificationTap: (message) async {
-          // Navigate using this app's own router.
-        },
-        onError: (error, stackTrace) {
-          // Send to Crashlytics/Sentry if desired.
-        },
-      ),
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
+
+  await EkkademyFcm.initialize(
+    EkkademyFcmConfig(
+      isAuthenticated: () async {
+        // Return current user authentication state
+        return authState.isAuthenticated;
+      },
+      showLocalNotificationOnForeground: true, // Enables heads-up banner in foreground
+      androidNotificationChannelId: 'ekkademy_fcm_channel',
+      androidNotificationChannelName: 'Ekkademy Notifications',
+      androidNotificationIcon: '@mipmap/ic_launcher',
+      onTokenSync: (token) async {
+        AppLogger.info('FCM token: $token');
+        await dio.post('/device-token', data: {'token': token});
+      },
+      onTokenDelete: (token) async {
+        AppLogger.info('FCM token deletion requested: $token');
+        await dio.delete('/device-token', data: {'token': token});
+      },
+      onForegroundMessage: (message) async {
+        AppLogger.info('FCM foreground message: ${message.messageId}');
+        // Handle in-app notification updates.
+      },
+      onNotificationTap: (message) async {
+        AppLogger.info('FCM notification tapped: ${message.messageId}');
+        // Navigate using app's router.
+      },
+      onError: (error, stackTrace) {
+        AppLogger.error('FCM error: $error');
+        // Send to Crashlytics.
+      },
     ),
-  ],
-  child: const App(),
-)
+  );
+
+  runApp(const MyApp());
+}
 ```
 
-`authState` and `dio` above are examples from the host application. Do not put
-those app-specific objects inside this package.
+No widget wrapper (`FcmInitializer`), `ref.read`, or `ProviderScope` override required!
 
 ## Usage Guide
 
-### 1. Initialize once
-Call after `Firebase.initializeApp()` and inside the configured `ProviderScope`:
-
-```dart
-ref.read(ekkademyFcmControllerProvider).initialize();
-```
-
-A convenient place is a small `ConsumerStatefulWidget` mounted once near the
-root of the app. Do not initialize it on every screen.
-
-### 2. Login Flow (Sync Token)
+### 1. Login Flow (Sync Token)
 After login or authentication handoff succeeds, call:
 
 ```dart
-await ref.read(ekkademyFcmControllerProvider).syncToken();
+await EkkademyFcm.syncToken();
 ```
+(Or via Riverpod: `await ref.read(ekkademyFcmControllerProvider).syncToken();`)
 
 This ensures the token is synced to the backend if initialization happened before login or while offline.
 
-### 3. Logout Flow (Unregister Token)
+### 2. Logout Flow (Unregister Token)
 When the user logs out, call:
 
 ```dart
-await ref.read(ekkademyFcmControllerProvider).unregisterToken();
+await EkkademyFcm.unregisterToken();
 ```
 
 This invokes `onTokenDelete` (unlinking the token from your backend) and deletes the FCM token from the local device instance to prevent unwanted notifications after logout.
 
-### 4. Topic Subscriptions
+### 3. Topic Subscriptions
 To subscribe or unsubscribe from FCM topics (e.g., `all_students`, `classroom_101`):
 
 ```dart
-final controller = ref.read(ekkademyFcmControllerProvider);
-
 // Subscribe
-await controller.subscribeToTopic('classroom_101');
+await EkkademyFcm.subscribeToTopic('classroom_101');
 
 // Unsubscribe
-await controller.unsubscribeFromTopic('classroom_101');
+await EkkademyFcm.unsubscribeFromTopic('classroom_101');
+```
+
+### 4. Optional Riverpod Integration
+If your app uses Riverpod, `ekkademyFcmControllerProvider` will automatically return `EkkademyFcm.instance` once initialized:
+
+```dart
+final controller = ref.watch(ekkademyFcmControllerProvider);
 ```
 
 ## Background Handler

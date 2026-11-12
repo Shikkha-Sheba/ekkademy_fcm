@@ -1,5 +1,6 @@
 library;
 
+export 'src/ekkademy_fcm_base.dart';
 export 'src/config/ekkademy_fcm_config.dart';
 export 'src/handlers/ekkademy_fcm_background_handler.dart';
 export 'src/providers/ekkademy_fcm_providers.dart';

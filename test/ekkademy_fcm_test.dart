@@ -2,6 +2,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ekkademy_fcm/ekkademy_fcm.dart';
 
 void main() {
+  tearDown(() async {
+    await EkkademyFcm.dispose();
+  });
+
   test('config requires app callbacks', () {
     var tokenDeleted = false;
     final config = EkkademyFcmConfig(
@@ -22,4 +26,10 @@ void main() {
     config.onTokenDelete?.call('test_token');
     expect(tokenDeleted, isTrue);
   });
+
+  test('EkkademyFcm throws StateError when accessed before initialize', () {
+    expect(EkkademyFcm.isInitialized, isFalse);
+    expect(() => EkkademyFcm.instance, throwsStateError);
+  });
 }
+
