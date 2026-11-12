@@ -22,8 +22,6 @@ authentication state, and app-specific navigation.
 
 - Flutter >= 3.27
 - Dart >= 3.8
-- Firebase Messaging 16.x or 17.x
-- Flutter Local Notifications 18.x or 19.x
 
 ## Install from Git
 
@@ -32,7 +30,7 @@ dependencies:
   ekkademy_fcm:
     git:
       url: git@github.com:Shikkha-Sheba/ekkademy_fcm.git
-      ref: v1.0.0
+      ref: v1.0.0 or main
 ```
 
 Replace the repository URL with the actual Git remote. For a private repository,
